@@ -36,7 +36,7 @@ def main():
             page.goto(url,wait_until='load')
             page.wait_for_function("() => [...document.querySelectorAll('.card-image>img')].slice(0,4).every(i=>i.complete&&i.naturalWidth===300)")
             assert page.locator('.card').count()==48
-            assert page.locator('.source-link').inner_text().startswith('原作：ギア')
+            assert page.locator('.source-link').inner_text().startswith('素材原站')
             data=json.loads(page.locator('#poseData').text_content())
             assert all(d['full'].startswith('assets/images/') and not d['full'].startswith('http') for d in data)
             page.locator('.card').first.click()
