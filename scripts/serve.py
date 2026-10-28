@@ -51,6 +51,8 @@ def main():
     parser.add_argument('--port', type=int, default=8899)
     parser.add_argument('--no-open', action='store_true')
     args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error('port must be between 1 and 65535')
     if not Path(GAL, 'index.html').is_file():
         raise SystemExit('Build the gallery first: python scripts/build.py')
     for port in range(args.port, min(args.port + 20, 65536)):

@@ -2,6 +2,7 @@
 from pathlib import Path
 import json
 import sys
+import os
 import tempfile
 import shutil
 import subprocess
@@ -32,7 +33,8 @@ def browser_tests():
     errors = []
     external = []
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(channel='msedge', headless=True)
+        channel=os.environ.get('POSE_BROWSER_CHANNEL','msedge')
+        browser = pw.chromium.launch(headless=True, **({'channel':channel} if channel!='chromium' else {}))
         context = browser.new_context(viewport={'width': 1440, 'height': 1000}, accept_downloads=True)
         page = context.new_page()
         page.on('pageerror', lambda e: errors.append(str(e)))

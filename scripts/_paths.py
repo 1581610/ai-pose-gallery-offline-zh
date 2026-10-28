@@ -10,6 +10,18 @@ AUDIT = str(Path(ROOT, 'tests'))
 SHOTS = str(Path(AUDIT, 'artifacts'))
 
 
+def validate_asset(rel):
+    if not isinstance(rel, str):
+        raise ValueError('Image path must be a string')
+    path = PurePosixPath(rel)
+    if (path.is_absolute() or '..' in path.parts or not path.parts
+            or path.parts[0] not in ('img', 'thumbs')
+            or ':' in rel or '\\' in rel
+            or path.suffix.lower() not in ('.png', '.jpg', '.jpeg', '.webp')):
+        raise ValueError(f'Unsafe image path: {rel}')
+    return path
+
+
 def asset_relative(rel):
     path = PurePosixPath(str(rel).replace('\\', '/'))
     if path.parts and path.parts[0] in ('img', 'thumbs'):

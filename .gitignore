@@ -1,5 +1,6 @@
 # Local generated output and personal artifacts.
 /dist/
+/.dist-*/
 /.archive/
 /tests/artifacts/
 /data/failures.txt

@@ -1,7 +1,10 @@
-name: Checks
+name: Check and publish
 on: [push, pull_request]
 permissions:
   contents: read
+concurrency:
+  group: gallery-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   source-and-tools:
     runs-on: ubuntu-latest
@@ -17,6 +20,60 @@ jobs:
       - name: Check JavaScript and Python
         run: |
           node --check src/app.js
-          python -m compileall -q scripts tests/test_gallery.py
+          python -m compileall -q scripts tests
       - name: Verify compression safety with generated fixtures
         run: python -X utf8 tests/test_gallery.py --tools-only
+      - name: Verify transactional builds and publish allowlist
+        run: python -X utf8 tests/test_tool_review.py
+      - name: Install isolated test browser
+        run: python -m playwright install --with-deps chromium
+      - name: Run browser regressions
+        env:
+          POSE_BROWSER_CHANNEL: chromium
+        run: |
+          python -X utf8 scripts/build.py
+          git diff --exit-code -- index.html
+          python -X utf8 tests/test_gallery.py
+          python -X utf8 tests/test_review.py
+          python -X utf8 scripts/build.py --hosted
+          python -X utf8 scripts/prepare_site.py
+          python -X utf8 tests/test_publish.py
+      - name: Preserve screenshots when a check fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics
+          path: tests/artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+  publish:
+    name: Publish gallery
+    needs: source-and-tools
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and stage the checked revision
+        run: |
+          python -X utf8 scripts/build.py --hosted
+          python -X utf8 scripts/prepare_site.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

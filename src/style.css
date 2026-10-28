@@ -8,6 +8,8 @@ dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);bo
 @media(max-height:480px) and (max-width:760px){.viewer-layout{grid-template-columns:minmax(0,1fr) 230px;grid-template-rows:minmax(0,1fr)}.viewer-info{border-left:1px solid var(--line);border-top:0}.stage-tools #prevPose,.stage-tools #nextPose{display:none}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .mobile-collection{display:none}
+.saved-detail{display:block;color:var(--accent);font-size:10px;margin-top:5px}.compare-select{display:flex;gap:12px;align-items:center}
+.toast{margin:0;top:auto;right:auto;border:0}
 @media(max-width:760px){.mobile-collection{display:flex}}
 
 .source-link{display:inline-flex;align-items:center;gap:10px;padding:7px 12px;min-height:36px;border:1px solid #d9a75e;border-radius:8px;background:#f4d6a2;color:#493315;font-size:12px;font-weight:700;white-space:nowrap}.source-link:hover{background:#edc17e;border-color:#a66f28}.source-link span{font-size:15px}:root[data-theme=dark] .source-link{background:#c99b56;color:#17251b;border-color:#e4bd82}:root[data-theme=dark] .source-link:hover{background:#e4bd82}@media(max-width:760px){.topbar .breadcrumb{display:none}.topbar .top-actions{width:100%}.topbar .source-link{margin-right:auto;min-height:32px;padding:4px 10px;font-size:11px}}

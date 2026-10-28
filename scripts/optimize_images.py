@@ -8,12 +8,14 @@ import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import random
+import shutil
 from PIL import Image, ImageChops
-from _paths import P, G, ROOT
+from _paths import P, G, ROOT, validate_asset
 
 
 def convert(job):
     rel, mode, apply = job
+    validate_asset(rel)
     source = Path(G(rel))
     if not source.exists():
         source = Path(G('归档', '原图', rel))
@@ -31,7 +33,10 @@ def convert(job):
                     raise ValueError('Dimension mismatch')
                 if mode == 'lossless' and ImageChops.difference(image, check.convert('RGB')).getbbox() is not None:
                     raise ValueError('Pixel mismatch in lossless conversion')
-        result = {'old': rel, 'new': str(Path(rel).with_suffix('.webp')).replace('\\', '/'), 'before': source.stat().st_size, 'after': len(blob)}
+        # Content-addressed names never overwrite a derivative still referenced
+        # by the current page, including when a later build fails and rolls back.
+        name = Path(rel).stem + '.' + hashlib.sha256(blob).hexdigest()[:16] + '.webp'
+        result = {'old': rel, 'new': str(Path(rel).with_name(name)).replace('\\', '/'), 'before': source.stat().st_size, 'after': len(blob)}
         # Larger derivatives bring no benefit. Keep the original reference.
         result['use'] = len(blob) < result['before']
         if apply and result['use']:
@@ -73,7 +78,7 @@ def run():
     after = sum(min(x['after'], x['before']) for x in successful)
     print(f'{len(successful)} verified; {len(errors)} failed. Active assets: {before/1048576:.2f} -> {after/1048576:.2f} MiB')
     if not args.apply:
-        print('No files created, moved or deleted. Total disk use is unchanged.')
+        print('No image or metadata files created, moved or deleted. Image disk use is unchanged.')
         return 1 if errors else 0
     if errors:
         print('Mapping unchanged; originals untouched. Successful derivatives can be reused on retry.')
@@ -85,6 +90,11 @@ def run():
     for result in successful:
         if result['use']:
             entries[result['old']] = {k: result[k] for k in ('old', 'new')}
+        else:
+            entries.pop(result['old'], None)
+            original = Path(G(result['old']))
+            if not original.exists():
+                shutil.copy2(G('归档', '原图', result['old']), original)
     temp = path.with_suffix('.json.tmp')
     temp.write_text(json.dumps({'files': list(entries.values()), 'mode': mode}, ensure_ascii=False, indent=2), encoding='utf-8')
     os.replace(temp, path)

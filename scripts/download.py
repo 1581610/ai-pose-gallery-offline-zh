@@ -8,6 +8,8 @@ from pathlib import Path, PurePosixPath
 import re
 import time
 import urllib.request
+import struct
+import zlib
 from _paths import P, G
 
 BASE = 'https://ai-pose-gallery.pages.dev/'
@@ -31,7 +33,32 @@ def safe_path(rel):
 
 
 def valid(blob, rel):
-    return (blob.startswith(b'\x89PNG\r\n\x1a\n') if rel.endswith('.png') else blob.startswith(b'\xff\xd8\xff') if rel.endswith('.jpg') else False)
+    if rel.endswith('.jpg'):
+        return len(blob)>100 and blob.startswith(b'\xff\xd8\xff') and blob.endswith(b'\xff\xd9')
+    if not rel.endswith('.png') or not blob.startswith(b'\x89PNG\r\n\x1a\n'):
+        return False
+    offset=8
+    has_header=has_pixels=False
+    while offset+12<=len(blob):
+        length=struct.unpack('>I',blob[offset:offset+4])[0]
+        end=offset+12+length
+        if end>len(blob):
+            return False
+        kind=blob[offset+4:offset+8]
+        payload=blob[offset+8:offset+8+length]
+        crc=struct.unpack('>I',blob[end-4:end])[0]
+        if zlib.crc32(kind+payload)&0xffffffff!=crc:
+            return False
+        if not has_header:
+            if kind!=b'IHDR' or length!=13:
+                return False
+            has_header=True
+        if kind==b'IDAT':
+            has_pixels=True
+        if kind==b'IEND':
+            return has_header and has_pixels and length==0 and end==len(blob)
+        offset=end
+    return False
 
 
 def bootstrap(source=None):

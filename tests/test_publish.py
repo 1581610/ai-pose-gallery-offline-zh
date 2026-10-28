@@ -4,6 +4,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import sys
+import os
 import json
 from playwright.sync_api import sync_playwright
 
@@ -28,7 +29,8 @@ def main():
     failures=[]
     try:
         with sync_playwright() as pw:
-            browser=pw.chromium.launch(channel='msedge',headless=True)
+            channel=os.environ.get('POSE_BROWSER_CHANNEL','msedge')
+            browser=pw.chromium.launch(headless=True,**({'channel':channel} if channel!='chromium' else {}))
             page=browser.new_page(viewport={'width':1440,'height':1000})
             page.on('pageerror',lambda e: failures.append(str(e)))
             page.on('response',lambda r: failures.append(f'{r.status}: {r.url}') if r.status>=400 else None)

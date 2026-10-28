@@ -4,7 +4,7 @@ import json
 import os
 import argparse
 from pathlib import Path, PurePosixPath
-from _paths import ROOT, P, G, asset_relative
+from _paths import ROOT, P, G, asset_relative, validate_asset
 
 
 def build(online=False, hosted=False):
@@ -24,14 +24,12 @@ def build(online=False, hosted=False):
         def asset(field):
             old = str(item.get(field, ''))
             if online:
-                p = PurePosixPath(old)
-                if p.is_absolute() or '..' in p.parts or not p.parts or p.parts[0] not in ('img', 'thumbs') or ':' in old or '\\' in old:
-                    raise ValueError(f'Unsafe image path: {old}')
+                p = validate_asset(old)
+                if hosted and not Path(G(*p.parts)).is_file():
+                    raise FileNotFoundError(f'Missing hosted image: {old}')
                 return asset_relative(old) if hosted else 'https://ai-pose-gallery.pages.dev/' + old
             rel = mapping.get(old, old)
-            p = PurePosixPath(rel)
-            if p.is_absolute() or '..' in p.parts or not p.parts or p.parts[0] not in ('img', 'thumbs') or ':' in rel or '\\' in rel:
-                raise ValueError(f'Unsafe image path: {rel}')
+            p = validate_asset(rel)
             if not Path(G(*p.parts)).is_file():
                 raise FileNotFoundError(f'Missing image: {rel}. Restore or download it before building.')
             return asset_relative(rel)
