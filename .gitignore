@@ -1,0 +1,15 @@
+# Local generated output and personal artifacts.
+/dist/
+/.archive/
+/tests/artifacts/
+/data/failures.txt
+__pycache__/
+*.py[cod]
+*.part
+*.tmp
+*.log
+.env
+.env.*
+pose-index-backup-*.json
+.DS_Store
+Thumbs.db

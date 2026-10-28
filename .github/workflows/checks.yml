@@ -1,0 +1,22 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  source-and-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Check JavaScript and Python
+        run: |
+          node --check src/app.js
+          python -m compileall -q scripts tests/test_gallery.py
+      - name: Verify compression safety with generated fixtures
+        run: python -X utf8 tests/test_gallery.py --tools-only
