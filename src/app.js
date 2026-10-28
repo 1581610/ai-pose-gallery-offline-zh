@@ -10,7 +10,6 @@ const ONLINE = GALLERY_MODE!=='offline';
 const HOSTED = GALLERY_MODE==='hosted';
 if(ONLINE){
   document.title='姿态索引 · 中文姿势参考图库';
-  $('.side-bottom p').textContent='个人记录留在本机 · 无统计脚本';
   $('.footer>span').textContent='姿态索引 · POSE INDEX / 素材原作者：ギア';
 }
 const byId = new Map(DATA.map(d => [d.id, d]));
