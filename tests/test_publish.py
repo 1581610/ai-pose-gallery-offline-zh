@@ -49,18 +49,17 @@ def main():
             page.locator('.card').first.click()
             page.wait_for_function("() => document.querySelector('#fullImage').naturalWidth===900")
             assert page.locator('#downloadImage').get_attribute('download').endswith('.png')
-            page.wait_for_function("() => document.querySelector('#dragStatus').dataset.state==='ready'")
             page.locator('#viewer').evaluate('''el=>{
               const zone=document.createElement('div');zone.id='file-drop-test';
               zone.style.cssText='position:absolute;right:20px;top:180px;width:220px;height:160px;background:lightblue;z-index:100';
               zone.addEventListener('dragover',e=>e.preventDefault());
               zone.addEventListener('drop',async e=>{
-                e.preventDefault();const file=e.dataTransfer.files[0];
+                e.preventDefault();const files=[...e.dataTransfer.files],file=files[0];
                 if(!file){window.dropResult={error:'No file payload'};return;}
                 const image=await createImageBitmap(file);
                 const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
                 const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-                window.dropResult={name:file.name,type:file.type,size:file.size,width:image.width,height:image.height,hash};image.close();
+                window.dropResult={count:files.length,name:file.name,type:file.type,size:file.size,width:image.width,height:image.height,hash};image.close();
               });el.append(zone);
             }''')
             image=page.locator('#fullImage').bounding_box();zone=page.locator('#file-drop-test').bounding_box()
@@ -78,13 +77,16 @@ def main():
             session.send('Input.dispatchMouseEvent',{'type':'mouseReleased','x':tx+2,'y':ty,'button':'left','buttons':0,'clickCount':1})
             page.wait_for_function('() => !!window.dropResult')
             drop=page.evaluate('window.dropResult')
-            assert drop.get('width')==900 and drop.get('height')==1200 and drop.get('size',0)>0,drop
+            assert drop.get('count')==1 and drop.get('width')==900 and drop.get('height')==1200 and drop.get('size',0)>0,drop
             expected=hashlib.sha256((ROOT/'assets/images/full_sexy_P001_front.png').read_bytes()).hexdigest()
             assert drop['hash']==expected,'Dropped file differs from original bytes'
             print('PASS native webpage drop receives real 900x1200 file with exact original SHA256',drop['type'],flush=True)
             page.locator('#file-drop-test').evaluate('el=>el.remove()')
             page.click('#closeViewer')
             page.screenshot(path=str(ROOT/'tests/artifacts/published-desktop.png'))
+            page.click('#themeBtn')
+            page.screenshot(path=str(ROOT/'tests/artifacts/published-dark.png'))
+            page.click('#themeBtn')
             page.set_viewport_size({'width':390,'height':844})
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             assert page.locator('.source-link').is_visible()
