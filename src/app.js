@@ -51,7 +51,8 @@ const loaded=read(KEY);
 let store=sanitize(loaded);
 if(!loaded) store.favImages=validIds(read('pose_fav'));
 const old=loaded?.view||{};
-const S={scope:['all','fav','recent'].includes(old.scope)||store.collections.some(c=>c.id===old.scope)?old.scope:'all',line:series.includes(old.line)?old.line:'',cat:typeof old.cat==='string'?old.cat:'',angle:ANGLES.includes(old.angle)?old.angle:'',query:typeof old.query==='string'?old.query.slice(0,500):'',mode:['pose','single','compare'].includes(old.mode)?old.mode:'pose',sort:old.sort==='name'?'name':'source',density:Math.max(155,Math.min(295,Number(old.density)||215)),ja:!!old.ja,theme:old.theme==='dark'?'dark':'light',shown:Math.max(1,Math.min(DATA.length,Number(old.shown)||48)),scroll:Math.max(0,Math.min(1000000,Number(old.scroll)||0))};
+const finite=(value,fallback)=>typeof value==='number'&&Number.isFinite(value)?Math.trunc(value):fallback;
+const S={scope:['all','fav','recent'].includes(old.scope)||store.collections.some(c=>c.id===old.scope)?old.scope:'all',line:series.includes(old.line)?old.line:'',cat:typeof old.cat==='string'?old.cat:'',angle:ANGLES.includes(old.angle)?old.angle:'',query:typeof old.query==='string'?old.query.slice(0,500):'',mode:['pose','single','compare'].includes(old.mode)?old.mode:'pose',sort:old.sort==='name'?'name':'source',density:Math.max(155,Math.min(295,finite(old.density,215))),ja:!!old.ja,theme:old.theme==='dark'?'dark':'light',shown:Math.max(1,Math.min(DATA.length,finite(old.shown,48))),scroll:Math.max(0,Math.min(1000000,finite(old.scroll,0)))};
 const selected=new Set();
 let cachedCollections='',cachedCategoryLine=null,seriesBuilt=false;
 let matches=[],results=[],filteredGroups=[],viewerGroups=[],current=null,zoom=1,pan={x:0,y:0},mirror=false,loadToken=0,returnFocus=null,storageWarning=false,searchTimer,composing=false;
@@ -197,6 +198,10 @@ function promptDialog(title,html,confirm='确定') {
     dlg.returnValue='';dlg.onclose=()=>{resolve(dlg.returnValue==='ok'?($('#dialogValue')?.value??true):null);dlg.onclose=null;};dlg.showModal();setTimeout(()=>$('#dialogValue')?.focus(),0);
   });
 }
+// Explicitly close local dialogs; never submit a network form. Making cancel
+// a non-submit button also ensures Enter in a name field confirms the action.
+$('#dialogForm').addEventListener('submit',event=>{event.preventDefault();$('#smallDialog').close('ok');});
+$('#dialogCancel').onclick=()=>$('#smallDialog').close('cancel');
 async function newCollection(items=[]) {
   if(store.collections.length>=1000){toast('最多支持 1000 个集合，请先整理已有集合');return null;}
   const name=await promptDialog('新建参考集合','<input id="dialogValue" aria-label="集合名称" maxlength="60" placeholder="例如：人物立绘、坐姿练习">','创建');
@@ -315,7 +320,14 @@ function pointerEnd(e){const start=gesture;points.delete(e.pointerId);if(!points
 $('#stage').addEventListener('pointerup',pointerEnd);$('#stage').addEventListener('pointercancel',pointerEnd);
 $('#helpBtn').onclick=()=>promptDialog('使用姿态索引','<p>搜索支持空格分隔的多个关键词，例如“坐姿 侧面”，并包含一组常用动作同义词。</p><p>点开图片：默认完整显示，滚轮或双指缩放，放大后拖动。← → 换角度，↑ ↓ 换姿势，F 收藏姿势。</p><p>卡片勾选会选择当前筛选命中的图片。整组收藏与单图收藏是独立开关。参考台可固定 4 张图。</p><p>导出个人资料可备份收藏、集合和备注。在线网站、直接打开文件和本地服务分别保存记录，换入口前请先导出迁移。</p><div class="help-actions"><button type="button" class="btn" id="helpBackup">导出个人资料</button> <label class="btn">导入资料<input type="file" id="helpImport" accept=".json" hidden></label></div><p>素材原作者：ギア。使用范围以顶部“素材原站”中的说明为准，代码开源许可不覆盖原素材。</p>','关闭').then(()=>{});
 $('#dialogBody').addEventListener('click',e=>{if(e.target.id==='helpBackup')$('#backupBtn').click();});
-$('#dialogBody').addEventListener('change',e=>{if(e.target.id==='helpImport'){const dt=new DataTransfer();for(const f of e.target.files)dt.items.add(f);$('#importInput').files=dt.files;$('#smallDialog').close();$('#importInput').dispatchEvent(new Event('change'));}});
+$('#dialogBody').addEventListener('change',async e=>{
+  if(e.target.id!=='helpImport'||!e.target.files.length)return;
+  const dt=new DataTransfer();for(const file of e.target.files)dt.items.add(file);
+  const dialog=$('#smallDialog');
+  const closed=new Promise(resolve=>dialog.addEventListener('close',resolve,{once:true}));
+  dialog.close();await closed;
+  $('#importInput').files=dt.files;$('#importInput').dispatchEvent(new Event('change'));
+});
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea,select,[contenteditable=true]'))return;
   if($('#smallDialog').open||$('#boardDialog').open)return;

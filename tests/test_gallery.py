@@ -9,7 +9,7 @@ import subprocess
 import threading
 from functools import partial
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'tests' / 'artifacts'
@@ -38,6 +38,7 @@ def browser_tests():
         context = browser.new_context(viewport={'width': 1440, 'height': 1000}, accept_downloads=True)
         page = context.new_page()
         page.on('pageerror', lambda e: errors.append(str(e)))
+        page.on('console', lambda m: print('BROWSER ERROR',m.text,flush=True) if m.type=='error' else None)
         page.on('request', lambda r: external.append(r.url) if r.url.startswith(('https:', 'http:')) and '127.0.0.1' not in r.url else None)
         page.goto((ROOT / 'index.html').as_uri(), wait_until='load')
         check(page.locator('.card').count() == 48, 'file:// opens with 48 pose cards')
@@ -67,6 +68,12 @@ def browser_tests():
         page.click('#addCollection')
         page.fill('#dialogValue', '构图练习')
         page.click('#dialogConfirm')
+        try:
+            expect(page.locator('#collections button').filter(has_text='构图练习')).to_have_count(1)
+        except Exception:
+            page.screenshot(path=str(OUT / 'collection-failure.png'))
+            print('DIALOG STATE',page.locator('#smallDialog').evaluate('d=>({open:d.open,result:d.returnValue})'),errors,flush=True)
+            raise
         check(page.locator('#collections button').filter(has_text='构图练习').count() == 1, 'create collection from viewer')
         page.click('#closeViewer')
         page.reload(wait_until='load')

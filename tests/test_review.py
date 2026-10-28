@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import sys
 import os
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 ROOT=Path(__file__).resolve().parents[1]
 URL=(ROOT/'index.html').as_uri()
@@ -158,8 +158,7 @@ def run():
         def too_many(p,c):
             raw={'format':'pose-index-backup','version':2,'collections':[{'id':f'c{i}','name':f'集合{i}','items':[]} for i in range(1001)]}
             p.set_input_files('#importInput',{'name':'backup.json','mimeType':'application/json','buffer':json.dumps(raw).encode()})
-            p.wait_for_timeout(120)
-            assert '1000' in p.inner_text('#toast')
+            expect(p.locator('#toast')).to_contain_text('1000')
             saved=json.loads(p.evaluate(f"localStorage.getItem('{KEY}')"))
             assert saved['favImages']==[FRONT] and not saved['collections']
         case('oversized collection import is rejected without data changes',too_many,{'favImages':[FRONT]})
@@ -168,11 +167,17 @@ def run():
             raw={'format':'pose-index-backup','version':2,'collections':[{'id':'cxss','name':'<img src=x onerror="window.pwned=1">','items':[FRONT,'invalid-id',FRONT]}],'notes':{POSE:'</textarea><script>window.pwned=1</script>'}}
             p.set_input_files('#importInput',{'name':'backup.json','mimeType':'application/json','buffer':json.dumps(raw).encode()})
             p.click('#dialogConfirm')
+            p.locator('#collections [data-scope="cxss"]').wait_for(state='attached')
             assert p.locator('#collections img').count()==0
             assert p.evaluate('window.pwned===undefined')
             saved=json.loads(p.evaluate(f"localStorage.getItem('{KEY}')"))
             assert saved['collections'][0]['items']==[FRONT]
         case('imported collection names and notes cannot inject markup',hostile_backup)
+
+        def invalid_view(p,c):
+            assert p.locator('.card').count()==48
+            assert p.get_attribute('html','data-theme')=='light'
+        case('malformed numeric view settings cannot crash startup',invalid_view,{'view':{'density':{'valueOf':None,'toString':None},'shown':{},'scroll':[]}})
 
         def restore(p,c):
             p.click('#loadMore')
@@ -220,6 +225,30 @@ def run():
             p.click('#fitImage')
             assert p.locator('#stage.zoomed').count()==0
         case('native two-finger pinch zooms and resets',pinch,mobile=True)
+
+        def enter_confirm(p,c):
+            p.click('#newCollection')
+            p.fill('#dialogValue','键盘创建')
+            p.keyboard.press('Enter')
+            expect(p.locator('#collections [data-scope]').filter(has_text='键盘创建')).to_have_count(1)
+        case('Enter confirms a collection name instead of cancelling',enter_confirm)
+
+        def cancel_dialog(p,c):
+            p.click('#newCollection')
+            p.fill('#dialogValue','不应保存')
+            p.click('#dialogCancel')
+            assert p.locator('#smallDialog').evaluate('el=>!el.open')
+            assert not p.locator('#collections [data-scope]').count()
+        case('cancel closes the dialog without saving data',cancel_dialog)
+
+        def help_import(p,c):
+            raw={'format':'pose-index-backup','version':2,'collections':[{'id':'cmobile','name':'帮助导入','items':[FRONT]}]}
+            p.click('#helpBtn')
+            p.set_input_files('#helpImport',{'name':'backup.json','mimeType':'application/json','buffer':json.dumps(raw).encode()})
+            expect(p.locator('#dialogTitle')).to_have_text('合并个人资料')
+            p.click('#dialogConfirm')
+            expect(p.locator('#collections [data-scope="cmobile"]')).to_have_count(1)
+        case('help import waits for old dialog before showing confirmation',help_import,mobile=True)
 
         browser.close()
     for name,message in failures:
