@@ -36,3 +36,5 @@ input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}.card-chec
 .library-stats dd{margin:0;color:var(--accent);font-size:30px;line-height:36px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-1px}
 .library-stats dt{order:1;color:var(--muted);font-size:12px;line-height:16px;letter-spacing:1px}
 @media(max-width:760px){.intro{padding:16px 0;gap:16px}.intro h1{font-size:30px;line-height:36px}.intro .intro-kicker{letter-spacing:1px}.intro .intro-subtitle{font-size:14px;line-height:20px;letter-spacing:0}.library-stats{display:none}}
+
+.repo-link{display:flex;align-items:center;justify-content:space-between;margin:8px 10px 0;padding:12px 0 0;border-top:1px solid var(--line);color:var(--accent);font-size:14px;line-height:20px}.repo-link:hover{text-decoration:underline;text-underline-offset:4px}@media(max-width:760px){.repo-link{margin:12px 0 0;padding-top:8px}}
