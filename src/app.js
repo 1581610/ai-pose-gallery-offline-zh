@@ -10,7 +10,6 @@ const ONLINE = GALLERY_MODE!=='offline';
 const HOSTED = GALLERY_MODE==='hosted';
 if(ONLINE){
   document.title='姿态索引 · 中文姿势参考图库';
-  $('#pageSubtitle').textContent=HOSTED?'搜索动作，查看完整原图；收藏、集合与备注保存在本机。':'图片由原作者站点提供，浏览需要联网。收藏、集合与备注保存在你的浏览器。';
   $('.side-bottom p').textContent='个人记录留在本机 · 无统计脚本';
   $('.footer>span').textContent='姿态索引 · POSE INDEX / 素材原作者：ギア';
 }
@@ -139,7 +138,10 @@ function nav() {
   $('#sort').value=S.sort;if(!composing&&document.activeElement!==$('#search'))$('#search').value=S.query;$('#density').value=S.density;$('#showJa').checked=S.ja;
   document.documentElement.dataset.theme=S.theme;document.documentElement.style.setProperty('--card-size',S.density+'px');document.body.classList.toggle('show-ja',S.ja);
   $$('#modes button').forEach(b=>{b.classList.toggle('active',b.dataset.mode===S.mode);b.setAttribute('aria-pressed',b.dataset.mode===S.mode);});
-  $('#pageTitle').textContent=collection()?.name||({all:'全部姿势',fav:'我的收藏',recent:'最近浏览'}[S.scope]||'参考集合');
+  const activeCollection=collection();
+  const heading=activeCollection?['REFERENCE COLLECTION',activeCollection.name,'把相关动作与视角，放在一起参考。']:({all:['POSE REFERENCE','姿势参考','观察形体，寻找构图。'],fav:['YOUR FAVOURITES','我的收藏','收集值得反复观察的姿态。'],recent:['RECENTLY VIEWED','最近浏览','接着上一次的观察与构思。']}[S.scope]||['REFERENCE COLLECTION','参考集合','把相关动作与视角，放在一起参考。']);
+  $('#pageKicker').textContent=heading[0];$('#pageTitle').textContent=heading[1];
+  $('#pageSubtitle').textContent=ONLINE&&!HOSTED?'图片由原作者网站提供，浏览时需要联网。':heading[2];
   $('#collectionActions').hidden=!collection();$('#boardCount').textContent=store.board.length+' / 4';
 }
 function chips() {
