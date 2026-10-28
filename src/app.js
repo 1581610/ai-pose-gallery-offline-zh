@@ -55,6 +55,9 @@ const finite=(value,fallback)=>typeof value==='number'&&Number.isFinite(value)?M
 const S={scope:['all','fav','recent'].includes(old.scope)||store.collections.some(c=>c.id===old.scope)?old.scope:'all',line:series.includes(old.line)?old.line:'',cat:typeof old.cat==='string'?old.cat:'',angle:ANGLES.includes(old.angle)?old.angle:'',query:typeof old.query==='string'?old.query.slice(0,500):'',mode:['pose','single','compare'].includes(old.mode)?old.mode:'pose',sort:old.sort==='name'?'name':'source',density:Math.max(155,Math.min(295,finite(old.density,215))),ja:!!old.ja,theme:old.theme==='dark'?'dark':'light',shown:Math.max(1,Math.min(DATA.length,finite(old.shown,48))),scroll:Math.max(0,Math.min(1000000,finite(old.scroll,0)))};
 const selected=new Set();
 let cachedCollections='',cachedCategoryLine=null,seriesBuilt=false;
+let dragFile=null,imageExporting=false;
+const dragCache=new Map(),localImages=new Map();
+const imageFilenames=new Set(DATA.map(d=>d.full.split('/').pop()));
 let matches=[],results=[],filteredGroups=[],viewerGroups=[],current=null,zoom=1,pan={x:0,y:0},mirror=false,loadToken=0,returnFocus=null,storageWarning=false,searchTimer,composing=false;
 const clone=x=>JSON.parse(JSON.stringify(x));
 let baseStore=clone(store);
@@ -236,18 +239,41 @@ function transform() {
 }
 function fit() {zoom=1;pan={x:0,y:0};transform();}
 function setZoom(z){const img=$('#fullImage'),max=Math.max(5,img.naturalWidth/Math.max(1,img.clientWidth),img.naturalHeight/Math.max(1,img.clientHeight));zoom=Math.max(1,Math.min(max,z));if(zoom===1)pan={x:0,y:0};transform();}
+function dragState(state,message){$('#dragStatus').dataset.state=state;$('#dragStatus').textContent=message;}
+function imageMime(filename){return filename.endsWith('.webp')?'image/webp':/\.jpe?g$/i.test(filename)?'image/jpeg':'image/png';}
+async function prepareDragFile(d,token){
+  const filename=d.full.split('/').pop(),url=new URL(d.full,document.baseURI);
+  const apply=file=>{if(token===loadToken&&current?.id===d.id){dragFile=file;dragState('ready','拖到网页或软件 · 放大后 Alt＋拖动');$('#dragFilesLabel').hidden=true;}};
+  if(localImages.has(filename)){apply(localImages.get(filename));return;}
+  if(dragCache.has(url.href)){apply(dragCache.get(url.href));return;}
+  if(!['http:','https:'].includes(location.protocol)||url.origin!==location.origin){
+    if(token===loadToken){dragState('directory','用启动器打开，或选择原图目录启用文件拖放');$('#dragFilesLabel').hidden=false;}
+    return;
+  }
+  try{
+    const response=await fetch(url.href,{cache:'force-cache',credentials:'same-origin'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const blob=await response.blob();
+    if(!blob.size||!blob.type.startsWith('image/'))throw new Error('读取结果不是图片');
+    const file=new File([blob],filename,{type:blob.type||imageMime(filename),lastModified:Date.now()});
+    dragCache.set(url.href,file);while(dragCache.size>4)dragCache.delete(dragCache.keys().next().value);
+    apply(file);
+  }catch{
+    if(token===loadToken){dragState('error','图片文件准备失败，可保存原图或选择本机目录');$('#dragFilesLabel').hidden=false;}
+  }
+}
 function openImage(id) {
   const d=byId.get(id);if(!d)return;
   if(!$('#viewer').open){returnFocus={element:document.activeElement,pose:d.pose,id:d.id};viewerGroups=filteredGroups.map(e=>({group:e.group,items:[...e.items]}));$('#viewer').showModal();document.body.style.overflow='hidden';}
   points.clear();gesture=null;$('#stage').classList.remove('dragging');
   current=d;fit();mirror=false;transform();viewerInfo();
   store.recent=[d.id,...store.recent.filter(x=>x!==d.id)].slice(0,150);save();
-  const token=++loadToken,img=$('#fullImage');img.src=d.thumb;img.alt=d.name+' '+d.angle;$('#imageStatus').textContent='正在读取原图…';
-  const full=new Image();full.onload=()=>{if(token!==loadToken)return;img.src=d.full;$('#imageStatus').textContent='';};full.onerror=()=>{if(token===loadToken)$('#imageStatus').textContent='原图读取失败，当前显示缩略图。请运行图片校验。';};full.src=d.full;
+  const token=++loadToken,img=$('#fullImage');dragFile=null;dragState('loading','正在准备图片文件…');$('#dragFilesLabel').hidden=true;img.src=d.thumb;img.alt=d.name+' '+d.angle;$('#imageStatus').textContent='正在读取原图…';
+  const full=new Image();full.onload=()=>{if(token!==loadToken)return;img.src=d.full;$('#imageStatus').textContent='';prepareDragFile(d,token);};full.onerror=()=>{if(token===loadToken){$('#imageStatus').textContent=ONLINE?'原图读取失败，当前显示缩略图。可使用原图按钮重试。':'原图读取失败，当前显示缩略图。请检查本机图片是否完整。';dragState('error','原图读取失败');$('#dragFilesLabel').hidden=false;}};full.src=d.full;
 }
 function closeViewer(){if($('#viewer').open)$('#viewer').close();}
 $('#viewer').addEventListener('close',()=>{
-  loadToken++;current=null;points.clear();gesture=null;document.body.style.overflow='';draw();
+  loadToken++;current=null;dragFile=null;imageExporting=false;points.clear();gesture=null;document.body.style.overflow='';draw();
   const focus=returnFocus?.element?.isConnected?returnFocus.element:
     $$('#grid [data-id]').find(e=>e.dataset.id===returnFocus?.id)||
     $$('#grid [data-pose]').find(e=>e.dataset.pose===returnFocus?.pose)||$('#grid .card,#grid [data-open]')||$('#search');
@@ -310,15 +336,54 @@ $('#prevAngle').onclick=()=>stepAngle(-1);$('#nextAngle').onclick=()=>stepAngle(
 $('#zoomIn').onclick=()=>setZoom(zoom*1.35);$('#zoomOut').onclick=()=>setZoom(zoom/1.35);$('#fitImage').onclick=fit;$('#mirrorImage').onclick=()=>{mirror=!mirror;transform();};
 $('#favPose').onclick=()=>current&&toggleFav(current.pose);$('#favImage').onclick=()=>current&&toggleFav(current.id);$('#pinImage').onclick=()=>current&&pin(current.id);$('#addCollection').onclick=()=>current&&addToCollection([current.id]);
 $('#poseNote').oninput=e=>{if(!current)return;store.notes[current.pose]=e.target.value;save();};
+$('#dragFilesInput').onchange=event=>{
+  let count=0;
+  for(const file of event.target.files){if(imageFilenames.has(file.name)&&file.size>0&&!file.webkitRelativePath.split('/').includes('thumbnails')){localImages.set(file.name,file);count++;}}
+  if(current)prepareDragFile(current,loadToken);
+  toast(count?'已在本机关联 '+count+' 张原图，可用于文件拖放':'没有找到对应原图，请选择 assets/images 文件夹');
+  event.target.value='';
+};
 $('#boardBtn').onclick=()=>{drawBoard();$('#boardDialog').showModal();};$('#closeBoard').onclick=()=>$('#boardDialog').close();$('#clearBoard').onclick=()=>{store.board=[];save();nav();drawBoard();};
 $('#boardGrid').onclick=e=>{const remove=e.target.closest('[data-board-remove]');if(remove){pin(remove.dataset.boardRemove);drawBoard();return;}if(e.target.closest('[data-board-mirror]'))e.target.closest('.board-card').firstElementChild.classList.toggle('mirror');};
 $('#stage').addEventListener('wheel',e=>{if(e.target.closest('button'))return;e.preventDefault();setZoom(zoom*(e.deltaY>0?0.88:1.14));},{passive:false});
 const points=new Map();let gesture=null;
-$('#stage').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;points.set(e.pointerId,{x:e.clientX,y:e.clientY});$('#stage').setPointerCapture(e.pointerId);if(points.size===1)gesture={x:e.clientX,y:e.clientY,pan:{...pan}};if(points.size===2){const p=[...points.values()];gesture={distance:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),zoom};}$('#stage').classList.add('dragging');});
+$('#stage').addEventListener('pointerdown',e=>{
+  if(e.target.closest('button'))return;
+  // Mouse image export belongs to the browser. Touch keeps swipe/pinch;
+  // zoomed mouse gestures pan unless Alt explicitly requests image export.
+  if(e.pointerType!=='touch'&&e.target===$('#fullImage')&&(zoom===1||e.altKey))return;
+  if(e.pointerType!=='touch')e.preventDefault();
+  points.set(e.pointerId,{x:e.clientX,y:e.clientY});$('#stage').setPointerCapture(e.pointerId);
+  if(points.size===1)gesture={x:e.clientX,y:e.clientY,pan:{...pan}};
+  if(points.size===2){const p=[...points.values()];gesture={distance:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),zoom};}
+  $('#stage').classList.add('dragging');
+});
+$('#fullImage').addEventListener('dragstart',event=>{
+  if(!current||zoom>1&&!event.altKey){event.preventDefault();return;}
+  const image=$('#fullImage'),url=new URL(current.full,document.baseURI).href;
+  if(image.src!==url||!image.complete||!image.naturalWidth){event.preventDefault();toast('原图尚未就绪，请等加载完成后拖出，或使用原图按钮');return;}
+  if(!dragFile){event.preventDefault();toast(location.protocol==='file:'?'请用一键启动器打开，或选择本机原图目录后再拖放':'正在准备图片文件，请稍后重试；也可保存原图');return;}
+  const filename=current.full.split('/').pop();
+  const mime=imageMime(filename);
+  // Preserve native bitmap/file formats and add full-resolution URL formats
+  // used by desktop file managers, drawing programs and other drop targets.
+  event.dataTransfer.effectAllowed='copy';
+  event.dataTransfer.items.add(dragFile);
+  imageExporting=true;
+  event.dataTransfer.setData('text/uri-list',url);
+  event.dataTransfer.setData('text/plain',url);
+  event.dataTransfer.setData('text/html',`<img src="${esc(url)}" alt="${esc(current.name)}">`);
+  event.dataTransfer.setData('DownloadURL',`${mime}:${filename}:${url}`);
+});
+$('#fullImage').addEventListener('dragend',()=>{imageExporting=false;points.clear();gesture=null;$('#stage').classList.remove('dragging');});
+// Dropping our own exported image back onto the viewer should not navigate
+// away. External drop targets still receive the normal file payload.
+$('#viewer').addEventListener('dragover',event=>{if(imageExporting)event.preventDefault();});
+$('#viewer').addEventListener('drop',event=>{if(imageExporting)event.preventDefault();});
 $('#stage').addEventListener('pointermove',e=>{if(!points.has(e.pointerId)||!gesture)return;points.set(e.pointerId,{x:e.clientX,y:e.clientY});if(points.size===2&&gesture.distance){const p=[...points.values()];setZoom(gesture.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/gesture.distance);}else if(points.size===1&&gesture.pan&&zoom>1){const rect=$('#stage').getBoundingClientRect();pan={x:Math.max(-rect.width*zoom/2,Math.min(rect.width*zoom/2,gesture.pan.x+e.clientX-gesture.x)),y:Math.max(-rect.height*zoom/2,Math.min(rect.height*zoom/2,gesture.pan.y+e.clientY-gesture.y))};transform();}});
 function pointerEnd(e){const start=gesture;points.delete(e.pointerId);if(!points.size){$('#stage').classList.remove('dragging');if(e.type==='pointerup'&&start?.pan&&zoom===1&&e.pointerType==='touch'&&Math.abs(e.clientX-start.x)>60&&Math.abs(e.clientX-start.x)>Math.abs(e.clientY-start.y)*1.5)stepAngle(e.clientX<start.x?1:-1);gesture=null;}else{const p=[...points.values()][0];gesture={x:p.x,y:p.y,pan:{...pan}};}}
 $('#stage').addEventListener('pointerup',pointerEnd);$('#stage').addEventListener('pointercancel',pointerEnd);
-$('#helpBtn').onclick=()=>promptDialog('使用姿态索引','<p>搜索支持空格分隔的多个关键词，例如“坐姿 侧面”，并包含一组常用动作同义词。</p><p>点开图片：默认完整显示，滚轮或双指缩放，放大后拖动。← → 换角度，↑ ↓ 换姿势，F 收藏姿势。</p><p>卡片勾选会选择当前筛选命中的图片。整组收藏与单图收藏是独立开关。参考台可固定 4 张图。</p><p>导出个人资料可备份收藏、集合和备注。在线网站、直接打开文件和本地服务分别保存记录，换入口前请先导出迁移。</p><div class="help-actions"><button type="button" class="btn" id="helpBackup">导出个人资料</button> <label class="btn">导入资料<input type="file" id="helpImport" accept=".json" hidden></label></div><p>素材原作者：ギア。使用范围以顶部“素材原站”中的说明为准，代码开源许可不覆盖原素材。</p>','关闭').then(()=>{});
+$('#helpBtn').onclick=()=>promptDialog('使用姿态索引','<p>搜索支持空格分隔的多个关键词，例如“坐姿 侧面”，并包含一组常用动作同义词。</p><p>点开图片：默认完整显示，滚轮或双指缩放，放大后拖动。未放大时可直接将原图拖到其他位置；放大后按 Alt 拖出原图。← → 换角度，↑ ↓ 换姿势，F 收藏姿势。</p><p>卡片勾选会选择当前筛选命中的图片。整组收藏与单图收藏是独立开关。参考台可固定 4 张图。</p><p>导出个人资料可备份收藏、集合和备注。在线网站、直接打开文件和本地服务分别保存记录，换入口前请先导出迁移。</p><div class="help-actions"><button type="button" class="btn" id="helpBackup">导出个人资料</button> <label class="btn">导入资料<input type="file" id="helpImport" accept=".json" hidden></label></div><p>素材原作者：ギア。使用范围以顶部“素材原站”中的说明为准，代码开源许可不覆盖原素材。</p>','关闭').then(()=>{});
 $('#dialogBody').addEventListener('click',e=>{if(e.target.id==='helpBackup')$('#backupBtn').click();});
 $('#dialogBody').addEventListener('change',async e=>{
   if(e.target.id!=='helpImport'||!e.target.files.length)return;

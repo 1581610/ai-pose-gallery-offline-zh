@@ -13,6 +13,10 @@ from _paths import GAL
 IDENTITY = str(Path(GAL).resolve())
 
 
+class GalleryServer(ThreadingHTTPServer):
+    request_queue_size = 128
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/__pose_index_health':
@@ -57,7 +61,7 @@ def main():
         raise SystemExit('Build the gallery first: python scripts/build.py')
     for port in range(args.port, min(args.port + 20, 65536)):
         try:
-            server = ThreadingHTTPServer(('127.0.0.1', port), partial(Handler, directory=GAL))
+            server = GalleryServer(('127.0.0.1', port), partial(Handler, directory=GAL))
             break
         except OSError:
             try:

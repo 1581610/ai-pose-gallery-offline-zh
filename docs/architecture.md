@@ -44,7 +44,7 @@ ai-pose-gallery-offline-zh/
 `poses.json + translations.zh-CN.json + src/* → build.py → index.html`
 
 - 原始数据中的 `img/...` 和 `thumbs/...` 不直接更改，路径层将它们映射到 `assets/images/...` 和 `assets/thumbnails/...`。
-- 离线单页包含全部检索数据，图片以相对路径读取，不需要 fetch、框架、CDN 或联网。
+- 离线单页包含全部检索数据，图片以相对路径读取，无需另取 JSON、框架、CDN 或联网。
 - `--hosted` 生成 `dist/index.html`，使用同源 `assets/` 图片；`prepare_site.py` 为 GitHub Pages 准备公开文件。
 - `--online` 可生成直接引用原作者图片地址的备用配置，不是默认发布模式。
 - `dist/`、测试截图、临时文件、压缩归档和个人备份不进入 Git。
@@ -60,3 +60,7 @@ ai-pose-gallery-offline-zh/
 
 浏览器记录写入前会合并其他标签页已保存的增删，并监听跨标签更新；视图状态仍由各标签页自行控制。
 集合与单图采用稳定 ID，备份导入会验证 ID、合并重复项；超出集合数量限制时明确拒绝，不截断保存的数据。
+
+网页文件拖放在拖动开始前准备好 `File`。HTTP 入口只从本站读取原图片字节，最多缓存 4 张文件，
+并保留原生图片地址、HTML 和下载格式。直接打开本地 HTML 时，使用文件夹选择关联已有原图，
+不绕过浏览器文件权限，不把全部图片字节嵌入 HTML，也不自动上传文件。

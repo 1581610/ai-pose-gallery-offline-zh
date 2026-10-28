@@ -6,9 +6,14 @@ import threading
 import sys
 import os
 import json
+import hashlib
 from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[1]
+
+
+class Server(ThreadingHTTPServer):
+    request_queue_size=128
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -24,7 +29,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
-    server=ThreadingHTTPServer(('127.0.0.1',0),partial(Handler,directory=str(ROOT/'dist')))
+    server=Server(('127.0.0.1',0),partial(Handler,directory=str(ROOT/'dist')))
     threading.Thread(target=server.serve_forever,daemon=True).start()
     failures=[]
     try:
@@ -44,6 +49,40 @@ def main():
             page.locator('.card').first.click()
             page.wait_for_function("() => document.querySelector('#fullImage').naturalWidth===900")
             assert page.locator('#downloadImage').get_attribute('download').endswith('.png')
+            page.wait_for_function("() => document.querySelector('#dragStatus').dataset.state==='ready'")
+            page.locator('#viewer').evaluate('''el=>{
+              const zone=document.createElement('div');zone.id='file-drop-test';
+              zone.style.cssText='position:absolute;right:20px;top:180px;width:220px;height:160px;background:lightblue;z-index:100';
+              zone.addEventListener('dragover',e=>e.preventDefault());
+              zone.addEventListener('drop',async e=>{
+                e.preventDefault();const file=e.dataTransfer.files[0];
+                if(!file){window.dropResult={error:'No file payload'};return;}
+                const image=await createImageBitmap(file);
+                const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+                const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+                window.dropResult={name:file.name,type:file.type,size:file.size,width:image.width,height:image.height,hash};image.close();
+              });el.append(zone);
+            }''')
+            image=page.locator('#fullImage').bounding_box();zone=page.locator('#file-drop-test').bounding_box()
+            x=image['x']+image['width']/2;y=image['y']+image['height']/2
+            # Playwright's intercepted drag replay loses in-memory File items.
+            # Use actual Chromium mouse input, without serializing the payload.
+            session=page.context.new_cdp_session(page)
+            session.send('Input.setInterceptDrags',{'enabled':False})
+            tx,ty=zone['x']+100,zone['y']+80
+            session.send('Input.dispatchMouseEvent',{'type':'mouseMoved','x':x,'y':y,'buttons':0})
+            session.send('Input.dispatchMouseEvent',{'type':'mousePressed','x':x,'y':y,'button':'left','buttons':1,'clickCount':1})
+            for i in range(1,21):
+                session.send('Input.dispatchMouseEvent',{'type':'mouseMoved','x':x+(tx-x)*i/20,'y':y+(ty-y)*i/20,'button':'left','buttons':1})
+            session.send('Input.dispatchMouseEvent',{'type':'mouseMoved','x':tx+2,'y':ty,'button':'left','buttons':1})
+            session.send('Input.dispatchMouseEvent',{'type':'mouseReleased','x':tx+2,'y':ty,'button':'left','buttons':0,'clickCount':1})
+            page.wait_for_function('() => !!window.dropResult')
+            drop=page.evaluate('window.dropResult')
+            assert drop.get('width')==900 and drop.get('height')==1200 and drop.get('size',0)>0,drop
+            expected=hashlib.sha256((ROOT/'assets/images/full_sexy_P001_front.png').read_bytes()).hexdigest()
+            assert drop['hash']==expected,'Dropped file differs from original bytes'
+            print('PASS native webpage drop receives real 900x1200 file with exact original SHA256',drop['type'],flush=True)
+            page.locator('#file-drop-test').evaluate('el=>el.remove()')
             page.click('#closeViewer')
             page.screenshot(path=str(ROOT/'tests/artifacts/published-desktop.png'))
             page.set_viewport_size({'width':390,'height':844})

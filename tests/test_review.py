@@ -30,7 +30,7 @@ def run():
                 fn(page, context)
                 print('PASS',name,flush=True)
             except Exception as ex:
-                failures.append((name,str(ex).splitlines()[0]))
+                failures.append((name,(str(ex).splitlines() or [type(ex).__name__])[0]))
                 print('FAIL',name,failures[-1][1],flush=True)
             finally:
                 context.close()
@@ -249,6 +249,44 @@ def run():
             p.click('#dialogConfirm')
             expect(p.locator('#collections [data-scope="cmobile"]')).to_have_count(1)
         case('help import waits for old dialog before showing confirmation',help_import,mobile=True)
+
+        def track_drag(p):
+            p.locator('.card').first.click()
+            p.wait_for_function("() => document.querySelector('#fullImage').naturalWidth===900")
+            p.set_input_files('#dragFilesInput',str(ROOT/'assets/images'))
+            p.wait_for_function("() => document.querySelector('#dragStatus').dataset.state==='ready'")
+            p.locator('#fullImage').evaluate("el=>{window.dragResult=null;el.addEventListener('dragstart',e=>window.dragResult={cancelled:e.defaultPrevented,types:[...e.dataTransfer.types],url:e.dataTransfer.getData('text/uri-list'),download:e.dataTransfer.getData('DownloadURL')})}")
+
+        def drag_image(p,alt=False):
+            r=p.locator('#fullImage').bounding_box();x=r['x']+r['width']/2;y=r['y']+r['height']/2
+            if alt:p.keyboard.down('Alt')
+            p.mouse.move(x,y);p.mouse.down();p.mouse.move(x+100,y+60,steps=12);p.mouse.up()
+            if alt:p.keyboard.up('Alt')
+            return p.evaluate('window.dragResult')
+
+        def native_drag(p,c):
+            track_drag(p)
+            result=drag_image(p)
+            assert result and not result['cancelled'], 'native image drag did not start'
+            assert 'downloadurl' in [t.lower() for t in result['types']] and 'text/uri-list' in result['types'], result
+            assert 'files' in [t.lower() for t in result['types']], result
+            assert result['download'].startswith('image/png:'), result
+            assert '/assets/images/' in result['url'] and result['url'].endswith('.png'), result
+        case('fit image exports full-resolution native drag data',native_drag)
+
+        def native_pan(p,c):
+            track_drag(p);p.click('#zoomIn');p.click('#zoomIn')
+            result=drag_image(p)
+            assert not result or result['cancelled'], 'zoomed pan incorrectly exports a file'
+            transform=p.locator('#fullImage').evaluate('el=>{const m=new DOMMatrixReadOnly(getComputedStyle(el).transform);return {x:m.e,y:m.f}}')
+            assert abs(transform['y'])>1, transform
+        case('zoomed image drag still pans instead of exporting',native_pan)
+
+        def native_alt_drag(p,c):
+            track_drag(p);p.click('#zoomIn')
+            result=drag_image(p,alt=True)
+            assert result and not result['cancelled'] and '/assets/images/' in result['url']
+        case('Alt drag exports original image while zoomed',native_alt_drag)
 
         browser.close()
     for name,message in failures:
