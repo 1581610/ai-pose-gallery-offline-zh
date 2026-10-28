@@ -286,6 +286,20 @@ def run():
             assert result and not result['cancelled'] and '/assets/images/' in result['url']
         case('Alt drag exports original image while zoomed',native_alt_drag)
 
+        def recent_revisit(p,c):
+            ids=[]
+            for index in [0,1,0]:
+                card=p.locator('.card').nth(index)
+                ids.append(card.get_attribute('data-id'))
+                card.click();p.click('#closeViewer')
+                expect(p.locator('#viewer')).not_to_be_visible()
+            p.reload()
+            p.click('[data-scope="recent"]')
+            expect(p.locator('.card').first).to_have_attribute('data-id',ids[-1])
+            history=p.evaluate("JSON.parse(localStorage.getItem('pose_index_v2')).recent")
+            assert history[:2]==[ids[0],ids[1]] and len(history)==2,history
+        case('revisiting a pose moves it to the front after save and reload',recent_revisit)
+
         browser.close()
     for name,message in failures:
         print('ISSUE:',name,'—',message)

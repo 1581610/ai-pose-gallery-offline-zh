@@ -92,11 +92,13 @@ function toast(message) {
   el.classList.add('visible');
   toast.timer=setTimeout(()=>{el.classList.remove('visible');toast.hideTimer=setTimeout(()=>el.hidePopover?.(),200);},3200);
 }
-function save() {
+function save(visitedId=null) {
   try {
     const before=JSON.stringify(store);
     const latest=read(KEY);
     if(latest)store=mergeStore(baseStore,store,sanitize(latest));
+    // An explicit visit must stay newest even when merging saved history.
+    if(visitedId&&byId.has(visitedId))store.recent=[visitedId,...store.recent.filter(id=>id!==visitedId)].slice(0,150);
     if(!['all','fav','recent'].includes(S.scope)&&!collection())S.scope='all';
     localStorage.setItem(KEY,JSON.stringify({...store,view:S}));
     baseStore=clone(store);
@@ -245,7 +247,7 @@ function openImage(id) {
   if(!$('#viewer').open){returnFocus={element:document.activeElement,pose:d.pose,id:d.id};viewerGroups=filteredGroups.map(e=>({group:e.group,items:[...e.items]}));$('#viewer').showModal();document.body.style.overflow='hidden';}
   points.clear();gesture=null;$('#stage').classList.remove('dragging');
   current=d;fit();mirror=false;transform();viewerInfo();
-  store.recent=[d.id,...store.recent.filter(x=>x!==d.id)].slice(0,150);save();
+  store.recent=[d.id,...store.recent.filter(x=>x!==d.id)].slice(0,150);save(d.id);
   const token=++loadToken,img=$('#fullImage');img.src=d.thumb;img.alt=d.name+' '+d.angle;$('#imageStatus').textContent='正在读取原图…';
   const full=new Image();full.onload=()=>{if(token!==loadToken)return;img.src=d.full;$('#imageStatus').textContent='';};full.onerror=()=>{if(token===loadToken)$('#imageStatus').textContent=ONLINE?'原图读取失败，当前显示缩略图。可使用原图按钮重试。':'原图读取失败，当前显示缩略图。请检查本机图片是否完整。';};full.src=d.full;
 }
