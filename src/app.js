@@ -15,6 +15,7 @@ if(ONLINE){
 }
 const byId = new Map(DATA.map(d => [d.id, d]));
 const ANGLES = ['正面','俯视','仰视','侧面','斜视'];
+const ANGLE_PROMPT = {'正面':'front view','俯视':'viewed from above','仰视':'viewed from below','侧面':'side view','斜视':'three-quarter view'};
 const groupMap = new Map();
 DATA.forEach(d => {
   if (!groupMap.has(d.pose)) groupMap.set(d.pose, { ...d, items: [] });
@@ -227,6 +228,9 @@ function viewerInfo() {
   const prompt = PROMPTS[d.pose] || '';
   $('#posePrompt').textContent = prompt || '该姿势暂无提示词';
   $('#copyPrompt').disabled = !prompt;
+  const prefix = ANGLE_PROMPT[d.angle] || '';
+  $('#anglePrefix').textContent = prefix;
+  $('#withAngle').closest('.prompt-view').hidden = !prefix;
   $('#viewerMeta').innerHTML=[['系列',d.line],['分类',d.cat],['视角',d.angle],['文件',d.full],['编号',d.id]].map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
   for(const [id,on,label] of [['favPose',store.favPoses.includes(d.pose),'姿势'],['favImage',store.favImages.includes(d.id),'此图']]){const b=$('#'+id);b.textContent=(on?'♥ 已收藏':'♡ 收藏')+label;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}
   const pin=store.board.includes(d.id);$('#pinImage').textContent=pin?'移出参考台':'放入参考台';$('#pinImage').classList.toggle('on',pin);
@@ -314,7 +318,7 @@ $('#importInput').onchange=async e=>{
     store.notes={...incoming.notes,...store.notes};store.recent=[...new Set([...store.recent,...incoming.recent])].slice(0,150);store.board=[...new Set([...store.board,...incoming.board])].slice(0,4);save();draw();toast('资料已合并');
   }catch(error){toast('导入失败：'+error.message);}finally{e.target.value='';}
 };
-$('#closeViewer').onclick=closeViewer;$('#copyPrompt').onclick=async()=>{const prompt=PROMPTS[current&&current.pose];if(!prompt)return;try{await navigator.clipboard.writeText(prompt);toast('已复制姿态提示词');}catch{await promptDialog('姿态提示词','<p>浏览器未允许直接复制，可在下面全选后复制。</p><textarea id="dialogValue" aria-label="姿态提示词" rows="6" readonly>'+esc(prompt)+'</textarea>','关闭');}};$('#viewerAngles').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openImage(b.dataset.open);};
+$('#closeViewer').onclick=closeViewer;$('#copyPrompt').onclick=async()=>{const pose=current&&current.pose,prompt=PROMPTS[pose];if(!prompt)return;const prefix=$('#withAngle').checked?(ANGLE_PROMPT[current.angle]||''):'';const text=prefix?prefix+', '+prompt:prompt;try{await navigator.clipboard.writeText(text);toast(prefix?'已复制：'+prefix+' + 姿态提示词':'已复制姿态提示词');}catch{await promptDialog('姿态提示词','<p>浏览器未允许直接复制，可在下面全选后复制。</p><textarea id="dialogValue" aria-label="姿态提示词" rows="6" readonly>'+esc(text)+'</textarea>','关闭');}};$('#viewerAngles').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openImage(b.dataset.open);};
 $('#prevAngle').onclick=()=>stepAngle(-1);$('#nextAngle').onclick=()=>stepAngle(1);$('#prevPose').onclick=()=>stepPose(-1);$('#nextPose').onclick=()=>stepPose(1);
 $('#zoomIn').onclick=()=>setZoom(zoom*1.35);$('#zoomOut').onclick=()=>setZoom(zoom/1.35);$('#fitImage').onclick=fit;$('#mirrorImage').onclick=()=>{mirror=!mirror;transform();};
 $('#favPose').onclick=()=>current&&toggleFav(current.pose);$('#favImage').onclick=()=>current&&toggleFav(current.id);$('#pinImage').onclick=()=>current&&pin(current.id);$('#addCollection').onclick=()=>current&&addToCollection([current.id]);
