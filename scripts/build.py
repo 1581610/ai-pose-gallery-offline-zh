@@ -10,6 +10,8 @@ from _paths import ROOT, P, G, asset_relative, validate_asset
 def build(online=False, hosted=False):
     records = json.loads(Path(P('poses.json')).read_text(encoding='utf-8'))
     zh = json.loads(Path(P('translations.zh-CN.json')).read_text(encoding='utf-8'))
+    prompts_path = Path(P('prompts.en.json'))
+    prompts = json.loads(prompts_path.read_text(encoding='utf-8')) if prompts_path.exists() else {}
     mapping_path = Path(P('image-map.json'))
     mapping = {}
     if mapping_path.exists() and not online:
@@ -46,6 +48,8 @@ def build(online=False, hosted=False):
     payload = json.dumps(output, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     html = html.replace('/*__STYLE__*/', (source / 'style.css').read_text(encoding='utf-8'), 1)
     html = html.replace('/*__APP__*/', (source / 'app.js').read_text(encoding='utf-8'), 1)
+    prompt_payload = json.dumps(prompts, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    html = html.replace('/*__PROMPTS__*/', prompt_payload, 1)
     html = html.replace('/*__DATA__*/', payload, 1).replace('__GALLERY_MODE__', 'hosted' if hosted else 'online' if online else 'offline', 1)
     if online and not hosted:
         html = html.replace("img-src 'self' data: blob: file:", "img-src 'self' data: blob: https://ai-pose-gallery.pages.dev")
@@ -54,7 +58,7 @@ def build(online=False, hosted=False):
     temp = dst.with_suffix('.html.tmp')
     temp.write_text(html, encoding='utf-8')
     os.replace(temp, dst)
-    print(f'Built {dst}: {len(output)} images / {len({x["pose"] for x in output})} poses')
+    print(f'Built {dst}: {len(output)} images / {len({x["pose"] for x in output})} poses / {len(prompts)} prompts')
 
 
 if __name__ == '__main__':

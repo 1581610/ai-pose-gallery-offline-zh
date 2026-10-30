@@ -5,6 +5,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DATA = JSON.parse($('#poseData').textContent);
+const PROMPTS = (() => { const el = document.getElementById('promptData'); if (!el) return {}; try { return JSON.parse(el.textContent) || {}; } catch (e) { return {}; } })();
 const GALLERY_MODE = document.querySelector('meta[name="pose-index-mode"]').content;
 const ONLINE = GALLERY_MODE!=='offline';
 const HOSTED = GALLERY_MODE==='hosted';
@@ -223,6 +224,9 @@ function viewerInfo() {
   $('#viewerNumber').textContent=d.num+' / '+d.angle;$('#viewerTitle').textContent=d.name;$('#viewerJa').textContent=d.ja;
   $('#viewerPosition').textContent=(viewerGroups.findIndex(e=>e.group.pose===d.pose)+1)+' / '+viewerGroups.length+' 姿势';
   $('#viewerAngles').innerHTML=ANGLES.map(a=>{const x=g.items.find(x=>x.angle===a);return x?`<button class="angle-mini ${x.id===d.id?'active':''}" data-open="${esc(x.id)}" aria-label="切换${a}"><img src="${esc(x.thumb)}" alt=""><span>${a}</span></button>`:'<span class="angle-mini missing">—</span>';}).join('');
+  const prompt = PROMPTS[d.pose] || '';
+  $('#posePrompt').textContent = prompt || '该姿势暂无提示词';
+  $('#copyPrompt').disabled = !prompt;
   $('#viewerMeta').innerHTML=[['系列',d.line],['分类',d.cat],['视角',d.angle],['文件',d.full],['编号',d.id]].map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
   for(const [id,on,label] of [['favPose',store.favPoses.includes(d.pose),'姿势'],['favImage',store.favImages.includes(d.id),'此图']]){const b=$('#'+id);b.textContent=(on?'♥ 已收藏':'♡ 收藏')+label;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}
   const pin=store.board.includes(d.id);$('#pinImage').textContent=pin?'移出参考台':'放入参考台';$('#pinImage').classList.toggle('on',pin);
@@ -310,7 +314,7 @@ $('#importInput').onchange=async e=>{
     store.notes={...incoming.notes,...store.notes};store.recent=[...new Set([...store.recent,...incoming.recent])].slice(0,150);store.board=[...new Set([...store.board,...incoming.board])].slice(0,4);save();draw();toast('资料已合并');
   }catch(error){toast('导入失败：'+error.message);}finally{e.target.value='';}
 };
-$('#closeViewer').onclick=closeViewer;$('#viewerAngles').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openImage(b.dataset.open);};
+$('#closeViewer').onclick=closeViewer;$('#copyPrompt').onclick=async()=>{const prompt=PROMPTS[current&&current.pose];if(!prompt)return;try{await navigator.clipboard.writeText(prompt);toast('已复制姿态提示词');}catch{await promptDialog('姿态提示词','<p>浏览器未允许直接复制，可在下面全选后复制。</p><textarea id="dialogValue" aria-label="姿态提示词" rows="6" readonly>'+esc(prompt)+'</textarea>','关闭');}};$('#viewerAngles').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openImage(b.dataset.open);};
 $('#prevAngle').onclick=()=>stepAngle(-1);$('#nextAngle').onclick=()=>stepAngle(1);$('#prevPose').onclick=()=>stepPose(-1);$('#nextPose').onclick=()=>stepPose(1);
 $('#zoomIn').onclick=()=>setZoom(zoom*1.35);$('#zoomOut').onclick=()=>setZoom(zoom/1.35);$('#fitImage').onclick=fit;$('#mirrorImage').onclick=()=>{mirror=!mirror;transform();};
 $('#favPose').onclick=()=>current&&toggleFav(current.pose);$('#favImage').onclick=()=>current&&toggleFav(current.id);$('#pinImage').onclick=()=>current&&pin(current.id);$('#addCollection').onclick=()=>current&&addToCollection([current.id]);
@@ -353,7 +357,7 @@ $('#viewer').addEventListener('drop',event=>{if(imageExporting)event.preventDefa
 $('#stage').addEventListener('pointermove',e=>{if(!points.has(e.pointerId)||!gesture)return;points.set(e.pointerId,{x:e.clientX,y:e.clientY});if(points.size===2&&gesture.distance){const p=[...points.values()];setZoom(gesture.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/gesture.distance);}else if(points.size===1&&gesture.pan&&zoom>1){const rect=$('#stage').getBoundingClientRect();pan={x:Math.max(-rect.width*zoom/2,Math.min(rect.width*zoom/2,gesture.pan.x+e.clientX-gesture.x)),y:Math.max(-rect.height*zoom/2,Math.min(rect.height*zoom/2,gesture.pan.y+e.clientY-gesture.y))};transform();}});
 function pointerEnd(e){const start=gesture;points.delete(e.pointerId);if(!points.size){$('#stage').classList.remove('dragging');if(e.type==='pointerup'&&start?.pan&&zoom===1&&e.pointerType==='touch'&&Math.abs(e.clientX-start.x)>60&&Math.abs(e.clientX-start.x)>Math.abs(e.clientY-start.y)*1.5)stepAngle(e.clientX<start.x?1:-1);gesture=null;}else{const p=[...points.values()][0];gesture={x:p.x,y:p.y,pan:{...pan}};}}
 $('#stage').addEventListener('pointerup',pointerEnd);$('#stage').addEventListener('pointercancel',pointerEnd);
-$('#helpBtn').onclick=()=>promptDialog('使用姿态索引','<p>搜索支持空格分隔的多个关键词，例如“坐姿 侧面”，并包含一组常用动作同义词。</p><p>点开图片：默认完整显示，滚轮或双指缩放，放大后拖动。未放大时可直接将原图拖到其他位置；放大后按 Alt 拖出原图。← → 换角度，↑ ↓ 换姿势，F 收藏姿势。</p><p>如果接收程序不支持图片拖放，请使用“保存原图”后上传。直接双击 HTML 时，网页上传区可能只收到图片地址；可通过“打开图库.cmd”启动本地服务后再拖出，全程无需联网。</p><p>卡片勾选会选择当前筛选命中的图片。整组收藏与单图收藏是独立开关。参考台可固定 4 张图。</p><p>导出个人资料可备份收藏、集合和备注。在线网站、直接打开文件和本地服务分别保存记录，换入口前请先导出迁移。</p><div class="help-actions"><button type="button" class="btn" id="helpBackup">导出个人资料</button> <label class="btn">导入资料<input type="file" id="helpImport" accept=".json" hidden></label></div><p>素材原作者：ギア。使用范围以顶部“素材原站”中的说明为准，代码开源许可不覆盖原素材。</p>','关闭').then(()=>{});
+$('#helpBtn').onclick=()=>promptDialog('使用姿态索引','<p>搜索支持空格分隔的多个关键词，例如“坐姿 侧面”，并包含一组常用动作同义词。</p><p>点开图片：右侧会显示该姿势的纯姿态英文提示词，点“复制提示词”即可拿去生图；内容只写身体动作，不含场景、服装或视角词。默认完整显示，滚轮或双指缩放，放大后拖动。未放大时可直接将原图拖到其他位置；放大后按 Alt 拖出原图。← → 换角度，↑ ↓ 换姿势，F 收藏姿势。</p><p>如果接收程序不支持图片拖放，请使用“保存原图”后上传。直接双击 HTML 时，网页上传区可能只收到图片地址；可通过“打开图库.cmd”启动本地服务后再拖出，全程无需联网。</p><p>卡片勾选会选择当前筛选命中的图片。整组收藏与单图收藏是独立开关。参考台可固定 4 张图。</p><p>导出个人资料可备份收藏、集合和备注。在线网站、直接打开文件和本地服务分别保存记录，换入口前请先导出迁移。</p><div class="help-actions"><button type="button" class="btn" id="helpBackup">导出个人资料</button> <label class="btn">导入资料<input type="file" id="helpImport" accept=".json" hidden></label></div><p>素材原作者：ギア。使用范围以顶部“素材原站”中的说明为准，代码开源许可不覆盖原素材。</p>','关闭').then(()=>{});
 $('#dialogBody').addEventListener('click',e=>{if(e.target.id==='helpBackup')$('#backupBtn').click();});
 $('#dialogBody').addEventListener('change',async e=>{
   if(e.target.id!=='helpImport'||!e.target.files.length)return;
