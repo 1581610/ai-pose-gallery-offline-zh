@@ -123,6 +123,26 @@ def run():
             assert p.get_attribute('#favPose','aria-pressed')=='true'
         case('Space activates focused viewer buttons',button_space)
 
+        def angle_prompts(p,c):
+            p.locator('.card').first.click()
+            c.grant_permissions(['clipboard-read','clipboard-write'])
+            expected = {
+                '正面': 'front view, eye-level camera',
+                '俯视': 'slightly high-angle view, camera looking down',
+                '仰视': 'low-angle view, camera looking up',
+                '侧面': 'side profile view, eye-level camera',
+                '斜视': 'three-quarter front view, eye-level camera',
+            }
+            for angle,prefix in expected.items():
+                p.locator(f'#viewerAngles [aria-label="切换{angle}"]').click()
+                assert p.inner_text('#anglePrefix')==prefix
+            p.check('#withAngle')
+            p.click('#copyPrompt')
+            prompt=json.loads(p.locator('#promptData').text_content())[POSE]
+            copied=p.evaluate('navigator.clipboard.readText()')
+            assert copied==expected['斜视']+', '+prompt
+        case('angle prefixes describe camera direction and are copied verbatim',angle_prompts)
+
         def actual_size(p,c):
             p.set_viewport_size({'width':740,'height':360})
             p.locator('.card').first.click()

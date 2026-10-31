@@ -15,7 +15,7 @@ if(ONLINE){
 }
 const byId = new Map(DATA.map(d => [d.id, d]));
 const ANGLES = ['正面','俯视','仰视','侧面','斜视'];
-const ANGLE_PROMPT = {'正面':'front view','俯视':'viewed from above','仰视':'viewed from below','侧面':'side view','斜视':'three-quarter view'};
+const ANGLE_PROMPT = {'正面':'front view, eye-level camera','俯视':'slightly high-angle view, camera looking down','仰视':'low-angle view, camera looking up','侧面':'side profile view, eye-level camera','斜视':'three-quarter front view, eye-level camera'};
 const groupMap = new Map();
 DATA.forEach(d => {
   if (!groupMap.has(d.pose)) groupMap.set(d.pose, { ...d, items: [] });
