@@ -44,3 +44,24 @@
 
 应用不加载第三方统计、字体或脚本。收藏、集合、备注、最近浏览和参考台状态仅写入浏览器本地存储。
 导出资料由使用者保存，不会上传至仓库或服务器。切换浏览器入口或设备时，可导出再导入迁移。
+工作台生成记录与结果存入浏览器 IndexedDB。API key 仅保存在当前页面内存。
+浏览扩展图库时会向对应来源站点请求图片；主动提交生成时，提示词与参考图会发送至用户配置的 API 或 ComfyUI 端点。
+
+## 扩展参考目录
+
+服装、人像及深度图扩展参考了 Anhao 的中文整理，固定上游版本为
+`488939139c69acfe078372b39d4bd0c457dc060e`。目录保留中文名称、检索标签、原站图片地址和来源说明。
+新增图片按选择从来源站点加载，元数据同步工具仅获取目录数据。[上游项目](https://github.com/anhao/ai-pose-gallery-zh/tree/488939139c69acfe078372b39d4bd0c457dc060e)
+
+| 来源 | 本项目使用范围 | 来源许可与说明 |
+| --- | --- | --- |
+| ギア写实服装 | 1,407 条中文索引和图片链接 | 原站允许单张生成参考，说明禁止批量下载、自动取得和图片再分发。[来源](https://ai-costume-gallery.pages.dev/) |
+| ギア动漫服装 | 1,320 条中文索引和图片链接 | 素材适用作者原站使用条件，保留来源链接。[来源](https://ai-costume-anime-gallery.pages.dev/) |
+| ギア姿势深度图 | 1,439 个与姿势 ID 配对的链接 | 原站允许单张生成参考，说明禁止批量下载、自动取得和图片再分发。[来源](https://ai-pose-depth-gallery.pages.dev/) |
+| ギア人像 | 1,499 条中文索引和图片链接 | 原站标示 CC0 1.0，并另有请勿再分发图片的请求。[来源](https://ai-portrait-gallery.pages.dev/) |
+| たき AI / CharaDB | 440 条中文服装索引和原始标签 | 标签为 CC0，图片适用其单独条款，包括禁止再分发、实在人物及未成年人用途。[许可](https://github.com/taki-ttt/charadb/blob/main/LICENSE) |
+| wquguru / Shisei | 57 套历代服装索引和多视角链接 | 图片按来源仓库的 CC0 1.0 声明使用。[许可](https://github.com/wquguru/shisei/blob/8f61ceab10e45f8d3afd254900903733a0ba76ee/LICENSE-images) |
+
+以上为 2026 年 11 月 6 日核对的来源说明摘要，具体素材使用以对应来源的条款为准。
+工作台将不同来源素材组合时，各张参考图仍分别适用其来源条件。
+Anhao 项目的程序代码采用 MIT，原始图片与数据的权利按其来源分别处理。[上游许可](https://github.com/anhao/ai-pose-gallery-zh/blob/488939139c69acfe078372b39d4bd0c457dc060e/LICENSE)

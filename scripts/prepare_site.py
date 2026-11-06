@@ -35,6 +35,11 @@ def prepare():
     actual = {d[k] for d in records for k in ('thumb', 'full')}
     if len(records) != len(catalog) or expected != actual or {d['id'] for d in records} != {d['id'] for d in catalog}:
         raise ValueError('Compiled page and source catalog differ; rebuild the hosted page')
+    reference_path = Path(P('reference-catalog.json'))
+    if reference_path.exists():
+        reference_data = re.search(r'<script id="referenceData" type="application/json">(.*?)</script>', html, re.S)
+        if not reference_data or json.loads(reference_data.group(1)) != json.loads(reference_path.read_text(encoding='utf-8')):
+            raise ValueError('Compiled reference catalog differs from source; rebuild the hosted page')
 
     # Build in a verified workspace-local temporary directory. Directory swaps
     # and recursive cleanup are restricted to this generated output only.

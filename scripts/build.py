@@ -12,6 +12,8 @@ def build(online=False, hosted=False):
     zh = json.loads(Path(P('translations.zh-CN.json')).read_text(encoding='utf-8'))
     prompts_path = Path(P('prompts.en.json'))
     prompts = json.loads(prompts_path.read_text(encoding='utf-8')) if prompts_path.exists() else {}
+    references_path = Path(P('reference-catalog.json'))
+    references = json.loads(references_path.read_text(encoding='utf-8')) if references_path.exists() else {'version': 1, 'sources': [], 'costumes': [], 'portraits': []}
     mapping_path = Path(P('image-map.json'))
     mapping = {}
     if mapping_path.exists() and not online:
@@ -46,10 +48,14 @@ def build(online=False, hosted=False):
     source = Path(ROOT) / 'src'
     html = (source / 'shell.html').read_text(encoding='utf-8')
     payload = json.dumps(output, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
-    html = html.replace('/*__STYLE__*/', (source / 'style.css').read_text(encoding='utf-8'), 1)
-    html = html.replace('/*__APP__*/', (source / 'app.js').read_text(encoding='utf-8'), 1)
+    styles = ['style.css', 'reference-library.css', 'studio.css']
+    scripts = ['app.js', 'workspaces.js', 'reference-library.js', 'generator.js', 'studio.js']
+    html = html.replace('/*__STYLE__*/', '\n'.join((source / name).read_text(encoding='utf-8') for name in styles), 1)
+    html = html.replace('/*__APP__*/', '\n'.join((source / name).read_text(encoding='utf-8') for name in scripts), 1)
     prompt_payload = json.dumps(prompts, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     html = html.replace('/*__PROMPTS__*/', prompt_payload, 1)
+    reference_payload = json.dumps(references, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    html = html.replace('/*__REFERENCES__*/', reference_payload, 1)
     html = html.replace('/*__DATA__*/', payload, 1).replace('__GALLERY_MODE__', 'hosted' if hosted else 'online' if online else 'offline', 1)
     if online and not hosted:
         html = html.replace("img-src 'self' data: blob: file:", "img-src 'self' data: blob: https://ai-pose-gallery.pages.dev")

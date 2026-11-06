@@ -9,6 +9,11 @@ const PROMPTS = (() => { const el = document.getElementById('promptData'); if (!
 const GALLERY_MODE = document.querySelector('meta[name="pose-index-mode"]').content;
 const ONLINE = GALLERY_MODE!=='offline';
 const HOSTED = GALLERY_MODE==='hosted';
+const originalImages = new Map(DATA.map(item => [item.id, {thumb: item.thumb, full: item.full}]));
+let depthMode = false;
+function depthImage(id, thumbnail = false) {
+  return 'https://ai-pose-depth-gallery.pages.dev/' + (thumbnail ? 'thumbs/' : 'img/') + encodeURIComponent(id) + (thumbnail ? '.jpg' : '.png');
+}
 if(ONLINE){
   document.title='姿态索引 · 中文姿势参考图库';
   $('.footer>span').textContent='姿态索引 · POSE INDEX / 素材原作者：ギア';
@@ -181,13 +186,14 @@ function draw(recompute=true) {
 function update(patch,{reset=true}={}) {
   clearTimeout(searchTimer);
   if(!Object.hasOwn(patch,'query')&&!composing)patch={query:$('#search').value,...patch};
-  const wasDeep=window.scrollY>$('.result-toolbar').offsetTop;
+  const activeWorkspace=document.getElementById('app').dataset.workspace==='poses';
+  const wasDeep=activeWorkspace&&window.scrollY>$('.result-toolbar').offsetTop;
   Object.assign(S,patch);
   if(reset){S.shown=batch();selected.clear();}
   if(!composing)$('#search').value=S.query;
   draw();
   if(reset&&wasDeep)window.scrollTo(0,Math.max(0,$('.result-toolbar').offsetTop-$('.controls').offsetHeight));
-  S.scroll=window.scrollY;save();
+  if(activeWorkspace)S.scroll=window.scrollY;save();
 }
 function reset() {update({scope:'all',line:'',cat:'',angle:'',query:''});}
 function toggleFav(value) {
@@ -235,6 +241,11 @@ function viewerInfo() {
   for(const [id,on,label] of [['favPose',store.favPoses.includes(d.pose),'姿势'],['favImage',store.favImages.includes(d.id),'此图']]){const b=$('#'+id);b.textContent=(on?'♥ 已收藏':'♡ 收藏')+label;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);}
   const pin=store.board.includes(d.id);$('#pinImage').textContent=pin?'移出参考台':'放入参考台';$('#pinImage').classList.toggle('on',pin);
   $('#downloadImage').href=d.full;$('#downloadImage').download=d.full.split('/').pop();if(document.activeElement!==$('#poseNote'))$('#poseNote').value=store.notes[d.pose]||'';
+  $('#viewerDepth').textContent=depthMode?'查看白模图':'查看深度图';
+  $('#viewerDepth').setAttribute('aria-pressed',String(depthMode));
+  $('#downloadImage').textContent=depthMode?'打开原站深度图 ↗':'保存原图';
+  if(depthMode){$('#downloadImage').removeAttribute('download');$('#downloadImage').target='_blank';$('#downloadImage').rel='noopener noreferrer';}
+  else{$('#downloadImage').removeAttribute('target');$('#downloadImage').removeAttribute('rel');}
   if(ONLINE&&!HOSTED){$('#downloadImage').removeAttribute('download');$('#downloadImage').target='_blank';$('#downloadImage').rel='noopener noreferrer';$('#downloadImage').textContent='打开原作者原图 ↗';}
   $('#prevPose').disabled=viewerGroups.findIndex(e=>e.group.pose===d.pose)<=0;$('#nextPose').disabled=viewerGroups.findIndex(e=>e.group.pose===d.pose)>=viewerGroups.length-1;
 }
@@ -256,8 +267,38 @@ function openImage(id) {
   current=d;fit();mirror=false;transform();viewerInfo();
   store.recent=[d.id,...store.recent.filter(x=>x!==d.id)].slice(0,150);save(d.id);
   const token=++loadToken,img=$('#fullImage');img.src=d.thumb;img.alt=d.name+' '+d.angle;$('#imageStatus').textContent='正在读取原图…';
-  const full=new Image();full.onload=()=>{if(token!==loadToken)return;img.src=d.full;$('#imageStatus').textContent='';};full.onerror=()=>{if(token===loadToken)$('#imageStatus').textContent=ONLINE?'原图读取失败，当前显示缩略图。可使用原图按钮重试。':'原图读取失败，当前显示缩略图。请检查本机图片是否完整。';};full.src=d.full;
+  const full=new Image();full.onload=()=>{if(token!==loadToken)return;img.src=d.full;$('#imageStatus').textContent='';};full.onerror=()=>{if(token===loadToken)$('#imageStatus').textContent=depthMode?'深度图读取失败，请检查网络或打开原站图片。':ONLINE?'原图读取失败，当前显示缩略图。可使用原图按钮重试。':'原图读取失败，当前显示缩略图。请检查本机图片是否完整。';};full.src=d.full;
 }
+function setDepthMode(enabled) {
+  depthMode = Boolean(enabled);
+  DATA.forEach(item => {
+    const original = originalImages.get(item.id);
+    item.thumb = depthMode ? depthImage(item.id, true) : original.thumb;
+    item.full = depthMode ? depthImage(item.id) : original.full;
+  });
+  $('#poseDepth').checked = depthMode;
+  draw();
+  if (current) openImage(current.id);
+}
+$('#poseDepth').addEventListener('change', event => setDepthMode(event.target.checked));
+$('#viewerDepth').addEventListener('click', () => setDepthMode(!depthMode));
+$('#addPoseRecipe').addEventListener('click', () => {
+  if (!current) return;
+  const item = current;
+  document.dispatchEvent(new CustomEvent('pose-recipe-add', {detail: {
+    ...item,
+    kind: 'pose',
+    prompt: [ANGLE_PROMPT[item.angle], PROMPTS[item.pose]].filter(Boolean).join(', '),
+    description: item.name + '，' + item.angle,
+    depthFull: depthImage(item.id),
+    normalFull: originalImages.get(item.id).full,
+    useDepth: depthMode,
+    sourceLabel: 'ギア · 姿势参考',
+    sourceUrl: depthMode ? 'https://ai-pose-depth-gallery.pages.dev/' : 'https://ai-pose-gallery.pages.dev/'
+  }}));
+  closeViewer();
+  toast('已加入姿势配方，可在合成台继续搭配');
+});
 function closeViewer(){if($('#viewer').open)$('#viewer').close();}
 $('#viewer').addEventListener('close',()=>{
   loadToken++;current=null;imageExporting=false;points.clear();gesture=null;document.body.style.overflow='';draw();
@@ -372,13 +413,14 @@ $('#dialogBody').addEventListener('change',async e=>{
   $('#importInput').files=dt.files;$('#importInput').dispatchEvent(new Event('change'));
 });
 document.addEventListener('keydown',e=>{
+  if(document.getElementById('app').dataset.workspace!=='poses')return;
   if(e.target.matches('input,textarea,select,[contenteditable=true]'))return;
   if($('#smallDialog').open||$('#boardDialog').open)return;
   if($('#viewer').open){if(e.key===' '&&e.target.closest('button,a,summary'))return;const actions={ArrowLeft:()=>stepAngle(-1),ArrowRight:()=>stepAngle(1),ArrowUp:()=>stepPose(-1),ArrowDown:()=>stepPose(1),f:()=>toggleFav(current.pose),F:()=>toggleFav(current.pose),' ':()=>{if(zoom!==1){fit();return;}const img=$('#fullImage'),z=Math.max(img.naturalWidth/img.clientWidth,img.naturalHeight/img.clientHeight);setZoom(z);}};if(actions[e.key]){e.preventDefault();actions[e.key]();}return;}
   if(e.key==='/'){e.preventDefault();$('#search').focus();}
 });
-let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{S.scroll=window.scrollY;save();},180);},{passive:true});
-window.addEventListener('pagehide',()=>{S.scroll=window.scrollY;save();});
+let scrollTimer;window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);if(document.getElementById('app').dataset.workspace!=='poses')return;scrollTimer=setTimeout(()=>{if(document.getElementById('app').dataset.workspace==='poses'){S.scroll=window.scrollY;save();}},180);},{passive:true});
+window.addEventListener('pagehide',()=>{if(document.getElementById('app').dataset.workspace==='poses'){S.scroll=window.scrollY;save();}});
 window.addEventListener('storage',event=>{
   if(event.key!==KEY&&event.key!==null)return;
   const next=sanitize(read(KEY));
@@ -388,5 +430,5 @@ window.addEventListener('storage',event=>{
   draw();if(current)viewerInfo();
 });
 window.addEventListener('resize',()=>{if(current)transform();});
-const initialScroll=S.scroll;draw();save();requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo(0,initialScroll)));
+const initialScroll=S.scroll;draw();save();requestAnimationFrame(()=>requestAnimationFrame(()=>{if(document.getElementById('app').dataset.workspace==='poses')window.scrollTo(0,initialScroll);}));
 })();

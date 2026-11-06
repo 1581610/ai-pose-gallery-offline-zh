@@ -20,7 +20,17 @@ jobs:
       - name: Check JavaScript and Python
         run: |
           node --check src/app.js
+          node --check src/workspaces.js
+          node --check src/reference-library.js
+          node --check src/generator.js
+          node --check src/studio.js
           python -m compileall -q scripts tests
+      - name: Verify reference data, image protocols, and optional nodes
+        run: |
+          python -X utf8 scripts/import_reference_catalog.py --check
+          python -X utf8 tests/test_reference_catalog.py
+          node --test tests/test_generator.cjs
+          python -X utf8 tests/test_comfy_plugin.py
       - name: Verify compression safety with generated fixtures
         run: python -X utf8 tests/test_gallery.py --tools-only
       - name: Verify transactional builds and publish allowlist
@@ -35,6 +45,7 @@ jobs:
           git diff --exit-code -- index.html
           python -X utf8 tests/test_gallery.py
           python -X utf8 tests/test_review.py
+          python -X utf8 tests/test_workbench.py
           python -X utf8 scripts/build.py --hosted
           python -X utf8 scripts/prepare_site.py
           python -X utf8 tests/test_publish.py
