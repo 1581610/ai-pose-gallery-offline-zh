@@ -177,10 +177,10 @@ def run():
                 expect(page.locator('#anglePrefix')).to_have_text('front view, eye-level camera')
                 page.click('#viewerDepth')
                 expect(page.locator('#viewerDepth')).to_have_attribute('aria-pressed', 'true')
-                page.wait_for_function("document.querySelector('#fullImage').src.includes('ai-pose-depth-gallery')")
+                page.wait_for_function("() => document.querySelector('#fullImage').src.includes('ai-pose-depth-gallery')")
                 page.click('#viewerDepth')
                 expect(page.locator('#viewerDepth')).to_have_attribute('aria-pressed', 'false')
-                page.wait_for_function("document.querySelector('#fullImage').src.includes('/assets/images/')")
+                page.wait_for_function("() => document.querySelector('#fullImage').src.includes('/assets/images/')")
                 expect(page.locator('#posePrompt')).to_have_text(prompts['full_sexy_P001'])
                 page.click('#closeViewer')
             case('offline pose startup, reviewed prompts and reversible depth view', pose_compatibility)
@@ -346,7 +346,7 @@ def run():
                 saved = page.evaluate("JSON.parse(localStorage.getItem('pose_index_v2')).view")
                 assert saved['scroll'] == 1000, 'other workspace scroll overwrites saved pose position'
                 navigate(page, 'poses')
-                page.wait_for_function('Math.abs(scrollY - 1000) < 3')
+                page.wait_for_function('() => Math.abs(scrollY - 1000) < 3')
                 expect(page.locator('#search')).to_have_value('P')
                 navigate(page, 'portraits')
                 page.evaluate('window.scrollTo(0, 1900)')
@@ -381,7 +381,7 @@ def run():
                 expect(page.locator('#studioPrompt')).to_have_value('手写配方提示词 regression 4631')
                 page.click('#studioCompose')
                 expect(page.locator('#studioCompositeDialog')).to_be_visible()
-                page.wait_for_function("document.querySelector('#studioCompositeImage').naturalWidth === 1800")
+                page.wait_for_function("() => document.querySelector('#studioCompositeImage').naturalWidth === 1800")
                 with page.expect_download() as pending:
                     page.click('#studioDownloadComposite')
                 with Image.open(pending.value.path()) as image:
@@ -588,7 +588,7 @@ def run():
                     assert urlsplit(page.url).path == PREFIX + '/'
                 navigate(page, 'poses')
                 page.locator('#grid .card').first.click()
-                page.wait_for_function("document.querySelector('#fullImage').naturalWidth === 900")
+                page.wait_for_function("() => document.querySelector('#fullImage').naturalWidth === 900")
                 assert PREFIX + '/assets/images/' in page.locator('#fullImage').get_attribute('src') or page.evaluate(
                     "document.querySelector('#fullImage').src.includes('/ai-pose-gallery-offline-zh/assets/images/')")
             case('repository-prefixed HTTP routes reload and retain local asset paths', repository_prefix, http=True)
